@@ -85,6 +85,16 @@ class _Base(plugin_base.PollsterBase):
                 ksclient, tenants))
         return iter(cache[self.CACHE_KEY_METHOD])
 
+    def _iter_accounts_containers(self, ksclient, cache, tenant, container):
+        endpoint = self._get_endpoint(ksclient)
+        if not endpoint:
+            raise StopIteration()
+        api_method = '%s_container' % self.METHOD
+        return (tenant, getattr(swift, api_method)
+                               (self._neaten_url(endpoint, tenant),
+                               keystone_client.get_auth_token(ksclient),
+                               container))
+
     def _get_account_info(self, ksclient, tenants):
         endpoint = self._get_endpoint(ksclient)
         if not endpoint:
@@ -195,7 +205,8 @@ class ContainersSizePollster(_Base):
                                                    cache, tenants):
             containers_info = account[1]
             for container in containers_info:
-                yield sample.Sample(
+		tenant, container_ = self._iter_accounts_containers(manager.keystone, cache, tenant, container['name'])
+		yield sample.Sample(
                     name='storage.containers.objects.size',
                     type=sample.TYPE_GAUGE,
                     volume=int(container['bytes']),
@@ -204,5 +215,5 @@ class ContainersSizePollster(_Base):
                     project_id=tenant,
                     resource_id=tenant + '/' + container['name'],
                     timestamp=timeutils.utcnow().isoformat(),
-                    resource_metadata=None,
+                    resource_metadata=container_[0],
                 )
